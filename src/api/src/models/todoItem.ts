@@ -1,5 +1,3 @@
-import mongoose, { Schema } from "mongoose";
-
 export enum TodoItemState {
     Todo = "todo",
     InProgress = "inprogress",
@@ -7,8 +5,8 @@ export enum TodoItemState {
 }
 
 export type TodoItem = {
-    id: mongoose.Types.ObjectId
-    listId: mongoose.Types.ObjectId
+    id: string
+    listId: string
     name: string
     state: TodoItemState
     description?: string
@@ -16,30 +14,23 @@ export type TodoItem = {
     completedDate?: Date
     createdDate?: Date
     updatedDate?: Date
+    Hash?: string
 }
 
-const schema = new Schema({
-    listId: {
-        type: Schema.Types.ObjectId,
-        required: true
-    },
-    name: {
-        type: String,
-        required: true
-    },
-    description: String,
-    state: {
-        type: String,
-        required: true,
-        default: TodoItemState.Todo
-    },
-    dueDate: Date,
-    completedDate: Date,
-}, {
-    timestamps: {
-        createdAt: "createdDate",
-        updatedAt: "updatedDate"
-    }
-});
+export const createTodoItem = (listId: string, name: string, description?: string): TodoItem => {
+    const now = new Date();
+    return {
+        id: generateId(),
+        listId,
+        name,
+        description,
+        state: TodoItemState.Todo,
+        createdDate: now,
+        updatedDate: now,
+        Hash: generateId() // Partition key for Cosmos DB
+    };
+};
 
-export const TodoItemModel = mongoose.model<TodoItem>("TodoItem", schema, "TodoItem");
+const generateId = (): string => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};

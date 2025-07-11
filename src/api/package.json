@@ -24,6 +24,7 @@
     ]
   },
   "dependencies": {
+    "@azure/cosmos": "^4.0.0",
     "@azure/identity": "4.2.1",
     "@azure/keyvault-secrets": "^4.7.0",
     "applicationinsights": "^2.5.1",
@@ -31,8 +32,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.0.1",
     "express": "^4.21.2",
-    "mongodb": "^4.17.0",
-    "mongoose": "^8.9.5",
     "swagger-jsdoc": "^6.2.1",
     "swagger-ui-express": "^4.4.0",
     "winston": "^3.7.2",
