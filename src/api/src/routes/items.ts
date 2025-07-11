@@ -88,6 +88,7 @@ router.put("/:itemId", async (req: Request<TodoItemPathParams, unknown, TodoItem
             ...req.body,
             id: req.params.itemId,
             listId: req.params.listId,
+            Hash: req.params.itemId, // Partition key must match id
             updatedDate: new Date()
         };
 
@@ -157,6 +158,7 @@ router.put("/state/:state", async (req: Request<TodoItemPathParams, unknown, str
                 resource.state = req.params.state;
                 resource.completedDate = completedDate;
                 resource.updatedDate = new Date();
+                resource.Hash = resource.id; // Ensure partition key is consistent
                 await container.item(id, id).replace(resource);
             }
         });

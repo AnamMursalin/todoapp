@@ -19,15 +19,16 @@ export type TodoItem = {
 
 export const createTodoItem = (listId: string, name: string, description?: string): TodoItem => {
     const now = new Date();
+    const id = generateId();
     return {
-        id: generateId(),
+        id,
         listId,
         name,
         description,
         state: TodoItemState.Todo,
         createdDate: now,
         updatedDate: now,
-        Hash: generateId() // Partition key for Cosmos DB
+        Hash: id // Partition key for Cosmos DB - same as id for simplicity
     };
 };
 

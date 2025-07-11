@@ -81,6 +81,7 @@ router.put("/:listId", async (req: Request<TodoListPathParams, unknown, TodoList
         const list: TodoList = {
             ...req.body,
             id: req.params.listId,
+            Hash: req.params.listId, // Partition key must match id
             updatedDate: new Date()
         };
 

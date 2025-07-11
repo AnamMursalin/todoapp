@@ -9,13 +9,14 @@ export type TodoList = {
 
 export const createTodoList = (name: string, description?: string): TodoList => {
     const now = new Date();
+    const id = generateId();
     return {
-        id: generateId(),
+        id,
         name,
         description,
         createdDate: now,
         updatedDate: now,
-        Hash: generateId() // Partition key for Cosmos DB
+        Hash: id // Partition key for Cosmos DB - same as id for simplicity
     };
 };
 
