@@ -1,7 +1,7 @@
 import express, { Request } from "express";
-import mongoose from "mongoose";
 import { PagingQueryParams } from "../routes/common";
-import { TodoList, TodoListModel } from "../models/todoList";
+import { TodoList, createTodoList } from "../models/todoList";
+import { getTodoListContainer } from "../models/cosmos";
 
 const router = express.Router();
 
@@ -13,15 +13,19 @@ type TodoListPathParams = {
  * Gets a list of Todo list
  */
 router.get("/", async (req: Request<unknown, unknown, unknown, PagingQueryParams>, res) => {
-    const query = TodoListModel.find();
-    const skip = req.query.skip ? parseInt(req.query.skip) : 0;
-    const top = req.query.top ? parseInt(req.query.top) : 20;
-    const lists = await query
-        .skip(skip)
-        .limit(top)
-        .exec();
-
-    res.json(lists);
+    try {
+        const container = getTodoListContainer();
+        const skip = req.query.skip ? parseInt(req.query.skip) : 0;
+        const top = req.query.top ? parseInt(req.query.top) : 20;
+        
+        const query = `SELECT * FROM c OFFSET ${skip} LIMIT ${top}`;
+        const { resources } = await container.items.query(query).fetchAll();
+        
+        res.json(resources);
+    } catch (err: any) {
+        console.error("Error getting todo lists:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
 });
 
 /**
@@ -29,20 +33,20 @@ router.get("/", async (req: Request<unknown, unknown, unknown, PagingQueryParams
  */
 router.post("/", async (req: Request<unknown, unknown, TodoList>, res) => {
     try {
-        let list = new TodoListModel(req.body);
-        list = await list.save();
-
-        res.setHeader("location", `${req.protocol}://${req.get("Host")}/lists/${list.id}`);
-        res.status(201).json(list);
-    }
-    catch (err: any) {
-        switch (err.constructor) {
-        case mongoose.Error.CastError:
-        case mongoose.Error.ValidationError:
-            return res.status(400).json(err.errors);
-        default:
-            throw err;
+        const container = getTodoListContainer();
+        const list = createTodoList(req.body.name, req.body.description);
+        
+        const { resource } = await container.items.create(list);
+        
+        if (!resource) {
+            return res.status(500).json({ error: "Failed to create todo list" });
         }
+        
+        res.setHeader("location", `${req.protocol}://${req.get("Host")}/lists/${resource.id}`);
+        res.status(201).json(resource);
+    } catch (err: any) {
+        console.error("Error creating todo list:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -51,21 +55,20 @@ router.post("/", async (req: Request<unknown, unknown, TodoList>, res) => {
  */
 router.get("/:listId", async (req: Request<TodoListPathParams>, res) => {
     try {
-        const list = await TodoListModel
-            .findById(req.params.listId)
-            .orFail()
-            .exec();
-
-        res.json(list);
-    }
-    catch (err: any) {
-        switch (err.constructor) {
-        case mongoose.Error.CastError:
-        case mongoose.Error.DocumentNotFoundError:
+        const container = getTodoListContainer();
+        const { resource } = await container.item(req.params.listId, req.params.listId).read();
+        
+        if (!resource) {
             return res.status(404).send();
-        default:
-            throw err;
         }
+        
+        res.json(resource);
+    } catch (err: any) {
+        if (err.code === 404) {
+            return res.status(404).send();
+        }
+        console.error("Error getting todo list:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -74,29 +77,23 @@ router.get("/:listId", async (req: Request<TodoListPathParams>, res) => {
  */
 router.put("/:listId", async (req: Request<TodoListPathParams, unknown, TodoList>, res) => {
     try {
+        const container = getTodoListContainer();
         const list: TodoList = {
             ...req.body,
-            id: req.params.listId
+            id: req.params.listId,
+            Hash: req.params.listId, // Partition key must match id
+            updatedDate: new Date()
         };
 
-        await TodoListModel.validate(list);
-        const updated = await TodoListModel
-            .findOneAndUpdate({ _id: list.id }, list, { new: true })
-            .orFail()
-            .exec();
-
-        res.json(updated);
-    }
-    catch (err: any) {
-        switch (err.constructor) {
-        case mongoose.Error.ValidationError:
-            return res.status(400).json(err.errors);
-        case mongoose.Error.CastError:
-        case mongoose.Error.DocumentNotFoundError:
+        const { resource } = await container.item(req.params.listId, req.params.listId).replace(list);
+        
+        res.json(resource);
+    } catch (err: any) {
+        if (err.code === 404) {
             return res.status(404).send();
-        default:
-            throw err;
         }
+        console.error("Error updating todo list:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -105,21 +102,16 @@ router.put("/:listId", async (req: Request<TodoListPathParams, unknown, TodoList
  */
 router.delete("/:listId", async (req: Request<TodoListPathParams>, res) => {
     try {
-        await TodoListModel
-            .findByIdAndDelete(req.params.listId, {})
-            .orFail()
-            .exec();
-
+        const container = getTodoListContainer();
+        await container.item(req.params.listId, req.params.listId).delete();
+        
         res.status(204).send();
-    }
-    catch (err: any) {
-        switch (err.constructor) {
-        case mongoose.Error.CastError:
-        case mongoose.Error.DocumentNotFoundError:
+    } catch (err: any) {
+        if (err.code === 404) {
             return res.status(404).send();
-        default:
-            throw err;
         }
+        console.error("Error deleting todo list:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 

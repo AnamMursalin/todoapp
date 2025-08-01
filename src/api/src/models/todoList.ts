@@ -1,24 +1,25 @@
-import mongoose, { Schema } from "mongoose";
-
 export type TodoList = {
     id: string
     name: string
     description?: string
     createdDate?: Date
     updatedDate?: Date
+    Hash?: string
 }
 
-const schema = new Schema({
-    name: {
-        type: String,
-        required: true,
-    },
-    description: String
-}, {
-    timestamps: {
-        createdAt: "createdDate",
-        updatedAt: "updatedDate"
-    }
-});
+export const createTodoList = (name: string, description?: string): TodoList => {
+    const now = new Date();
+    const id = generateId();
+    return {
+        id,
+        name,
+        description,
+        createdDate: now,
+        updatedDate: now,
+        Hash: id // Partition key for Cosmos DB - same as id for simplicity
+    };
+};
 
-export const TodoListModel = mongoose.model<TodoList>("TodoList", schema, "TodoList");
+const generateId = (): string => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};

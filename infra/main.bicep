@@ -39,14 +39,26 @@ param principalId string = ''
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
-var apiContainerAppNameOrDefault = '${abbrs.appContainerApps}web-${resourceToken}'
-var corsAcaUrl = 'https://${apiContainerAppNameOrDefault}.${containerApps.outputs.defaultDomain}'
+var apiContainerAppNameOrDefault = '${abbrs.appContainerApps}api-${resourceToken}'
 
 // Organize resources in a resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
   location: location
   tags: tags
+}
+
+// Monitor application with Azure Monitor
+module monitoring 'br/public:avm/ptn/azd/monitoring:0.1.0' = {
+  name: 'monitoring'
+  scope: rg
+  params: {
+    applicationInsightsName: !empty(applicationInsightsName) ? applicationInsightsName : '${abbrs.insightsComponents}${resourceToken}'
+    logAnalyticsName: !empty(logAnalyticsName) ? logAnalyticsName : '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
+    applicationInsightsDashboardName: !empty(applicationInsightsDashboardName) ? applicationInsightsDashboardName : '${abbrs.portalDashboards}${resourceToken}'
+    location: location
+    tags: tags
+  }
 }
 
 // Container apps host (including container registry)
@@ -65,6 +77,8 @@ module containerApps 'br/public:avm/ptn/azd/container-apps-stack:0.1.0' = {
     tags: tags
   }
 }
+
+var corsAcaUrl = 'https://${apiContainerAppNameOrDefault}.${containerApps.outputs.defaultDomain}'
 
 //the managed identity for web frontend
 module webIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.2.1' = {
@@ -125,6 +139,14 @@ module api 'br/public:avm/ptn/azd/container-app-upsert:0.1.1' = {
         value: keyVault.outputs.uri
       }
       {
+        name: 'AZURE_COSMOS_ENDPOINT'
+        value: cosmos.outputs.endpoint
+      }
+      {
+        name: 'AZURE_COSMOS_DATABASE_NAME'
+        value: cosmos.outputs.databaseName
+      }
+      {
         name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
         value: monitoring.outputs.applicationInsightsConnectionString
       }
@@ -157,7 +179,16 @@ module cosmos './app/db-avm.bicep' = {
     accountName: !empty(cosmosAccountName) ? cosmosAccountName : '${abbrs.documentDBDatabaseAccounts}${resourceToken}'
     location: location
     tags: tags
-    keyVaultResourceId: keyVault.outputs.resourceId
+  }
+}
+
+// Role assignment for API managed identity to access Cosmos DB
+module apiCosmosRoleAssignment './app/cosmos-role-assignment.bicep' = {
+  name: 'api-cosmos-role'
+  scope: rg
+  params: {
+    cosmosAccountName: cosmos.outputs.accountName
+    apiPrincipalId: apiIdentity.outputs.principalId
   }
 }
 
@@ -188,19 +219,6 @@ module keyVault 'br/public:avm/res/key-vault/vault:0.5.1' = {
         }
       }
     ]
-  }
-}
-
-// Monitor application with Azure Monitor
-module monitoring 'br/public:avm/ptn/azd/monitoring:0.1.0' = {
-  name: 'monitoring'
-  scope: rg
-  params: {
-    applicationInsightsName: !empty(applicationInsightsName) ? applicationInsightsName : '${abbrs.insightsComponents}${resourceToken}'
-    logAnalyticsName: !empty(logAnalyticsName) ? logAnalyticsName : '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
-    applicationInsightsDashboardName: !empty(applicationInsightsDashboardName) ? applicationInsightsDashboardName : '${abbrs.portalDashboards}${resourceToken}'
-    location: location
-    tags: tags
   }
 }
 
@@ -250,7 +268,7 @@ module apimApi 'br/public:avm/ptn/azd/apim-api:0.1.0' = if (useAPIM) {
 }
 
 // Data outputs
-output AZURE_COSMOS_CONNECTION_STRING_KEY string = cosmos.outputs.connectionStringKey
+output AZURE_COSMOS_ENDPOINT string = cosmos.outputs.endpoint
 output AZURE_COSMOS_DATABASE_NAME string = cosmos.outputs.databaseName
 
 // App outputs
