@@ -39,7 +39,6 @@ param principalId string = ''
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
-var apiContainerAppNameOrDefault = '${abbrs.appContainerApps}api-${resourceToken}'
 
 // Organize resources in a resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
@@ -77,8 +76,6 @@ module containerApps 'br/public:avm/ptn/azd/container-apps-stack:0.1.0' = {
     tags: tags
   }
 }
-
-var corsAcaUrl = 'https://${apiContainerAppNameOrDefault}.${containerApps.outputs.defaultDomain}'
 
 //the managed identity for web frontend
 module webIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.2.1' = {
@@ -122,7 +119,7 @@ module apiIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.
 }
 
 // Api backend
-module api 'br/public:avm/ptn/azd/container-app-upsert:0.1.1' = {
+module api 'br/public:avm/ptn/azd/container-app-upsert:0.3.0' = {
   name: 'api-container-app'
   scope: rg
   params: {
@@ -152,7 +149,7 @@ module api 'br/public:avm/ptn/azd/container-app-upsert:0.1.1' = {
       }
       {
         name: 'API_ALLOW_ORIGINS'
-        value: corsAcaUrl
+        value: web.outputs.uri
       }
     ]
     containerAppsEnvironmentName: containerApps.outputs.environmentName
@@ -166,6 +163,9 @@ module api 'br/public:avm/ptn/azd/container-app-upsert:0.1.1' = {
     containerMinReplicas: 1
     ingressEnabled: true
     containerName: 'main'
+    allowedOrigins: [
+      web.outputs.uri
+    ]
     userAssignedIdentityResourceId: apiIdentity.outputs.resourceId
     identityPrincipalId: apiIdentity.outputs.principalId
   }
@@ -272,7 +272,6 @@ output AZURE_COSMOS_ENDPOINT string = cosmos.outputs.endpoint
 output AZURE_COSMOS_DATABASE_NAME string = cosmos.outputs.databaseName
 
 // App outputs
-output API_CORS_ACA_URL string = corsAcaUrl
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = monitoring.outputs.applicationInsightsConnectionString
 output APPLICATIONINSIGHTS_NAME string = monitoring.outputs.applicationInsightsName
 output AZURE_CONTAINER_ENVIRONMENT_NAME string = containerApps.outputs.environmentName
