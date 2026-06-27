@@ -10,7 +10,7 @@ trigger:
 # See below for alternative task to install azd if you can't install above task in your organization
 
 pool:
-  vmImage: ubuntu-latest
+  name: Default
 
 steps:
   - task: setup-azd@1 
